@@ -56,5 +56,16 @@
             '';
           };
       });
+      devShells.default = eachSystem (
+        system:
+        let
+          pkgs = pkgsFor.${system};
+          inherit (inputs.hyprland.packages.${system}) hyprland;
+        in
+        pkgs.mkShell {
+          inputsFrom = [ hyprland ];
+        }
+      );
     };
+
 }
