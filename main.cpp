@@ -12,9 +12,9 @@
 #include <hyprland/src/managers/EventManager.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 #include <hyprland/src/render/Renderer.hpp>
+#include <hyprland/src/event/EventBus.hpp>
 
 #include <cstring>
-#include <thread>
 #include <unistd.h>
 #include <xcb/randr.h>
 #include <xcb/xcb.h>
@@ -26,10 +26,9 @@ APICALL EXPORT std::string PLUGIN_API_VERSION() {
 }
 
 namespace XwaylandPrimaryPlugin {
+    CHyprSignalListener prerenderHook;
 
-    SP<HOOK_CALLBACK_FN> prerenderHook;
-
-    void                 setXWaylandPrimary() {
+    void                setXWaylandPrimary() {
         if (!g_pXWayland || !g_pXWayland->m_wm || !g_pXWayland->m_wm->m_connection || !g_pXWayland->m_wm->m_screen) {
             Log::logger->log(Log::DEBUG, "XWaylandPrimary: No XWayland client");
             return;
@@ -115,8 +114,7 @@ namespace XwaylandPrimaryPlugin {
                 // If there's an existing prerender hook, cancel it.
                 prerenderHook = nullptr;
             }
-            prerenderHook =
-                HyprlandAPI::registerCallbackDynamic(PHANDLE, "preRender", [&](void* self, SCallbackInfo&, std::any data) { XwaylandPrimaryPlugin::setXWaylandPrimary(); });
+            prerenderHook = Event::bus()->m_events.render.pre.listen([] { XwaylandPrimaryPlugin::setXWaylandPrimary(); });
         }
     }
 } // namespace XwaylandPrimaryPlugin
@@ -126,8 +124,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:xwaylandprimary:display", Hyprlang::STRING{STRVAL_EMPTY});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:xwaylandprimary:followfocused", Hyprlang::INT{0});
-    static auto CONFIGRELOAD =
-        HyprlandAPI::registerCallbackDynamic(PHANDLE, "configReloaded", [&](void* self, SCallbackInfo& info, std::any data) { XwaylandPrimaryPlugin::setXWaylandPrimary(); });
+    static auto CONFIGRELOAD = Event::bus()->m_events.config.reloaded.listen([] { XwaylandPrimaryPlugin::setXWaylandPrimary(); });
 
     HyprlandAPI::reloadConfig();
 
@@ -140,9 +137,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         }
     }
 
-    static auto MACB = HyprlandAPI::registerCallbackDynamic(PHANDLE, "monitorAdded", [&](void* self, SCallbackInfo&, std::any data) { XwaylandPrimaryPlugin::monitorEvent(); });
-    static auto MRCB = HyprlandAPI::registerCallbackDynamic(PHANDLE, "monitorRemoved", [&](void* self, SCallbackInfo&, std::any data) { XwaylandPrimaryPlugin::monitorEvent(); });
-    static auto FMCB = HyprlandAPI::registerCallbackDynamic(PHANDLE, "focusedMon", [&](void* self, SCallbackInfo&, std::any data) { XwaylandPrimaryPlugin::monitorEvent(); });
+    static auto MACB = Event::bus()->m_events.monitor.added.listen([] { XwaylandPrimaryPlugin::monitorEvent(); });
+    static auto MRCB = Event::bus()->m_events.monitor.removed.listen([] { XwaylandPrimaryPlugin::monitorEvent(); });
+    static auto FMCB = Event::bus()->m_events.monitor.focused.listen([] { XwaylandPrimaryPlugin::monitorEvent(); });
 
     XwaylandPrimaryPlugin::setXWaylandPrimary();
 
